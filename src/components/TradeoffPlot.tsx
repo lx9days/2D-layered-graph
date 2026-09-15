@@ -29,7 +29,7 @@ export default function TradeoffPlot({ points, activeRows, onSelectRows }: Trade
       <div className="plot-card__header">
         <div>
           <h3>宽度 - 交叉数权衡</h3>
-          <p>点击点位可以直接切换右侧紧凑布局的每层行数。</p>
+          <p>点击点位可以切换右侧紧凑布局的最大块内行数；实际行数按层规模调整。</p>
         </div>
         <div className="plot-card__legend">Rows = {activeRows}</div>
       </div>

@@ -5,12 +5,18 @@ interface ControlPanelProps {
   activePreset: PresetSelection;
   graphConfig: GraphConfig;
   rowsPerLayer: number;
+  blockSpread: number;
+  spanExponent: number;
+  edgeBundling: boolean;
   ordering: OrderingStrategy;
   traversal: TraversalStrategy;
   layerSummary: string;
   onApplyPreset: (presetKey: keyof typeof presets) => void;
   onUpdateGraphConfig: (patch: Partial<GraphConfig>) => void;
   onUpdateRows: (rows: number) => void;
+  onUpdateBlockSpread: (spread: number) => void;
+  onUpdateSpanExponent: (exponent: number) => void;
+  onUpdateEdgeBundling: (enabled: boolean) => void;
   onUpdateOrdering: (ordering: OrderingStrategy) => void;
   onUpdateTraversal: (traversal: TraversalStrategy) => void;
 }
@@ -19,12 +25,18 @@ export default function ControlPanel({
   activePreset,
   graphConfig,
   rowsPerLayer,
+  blockSpread,
+  spanExponent,
+  edgeBundling,
   ordering,
   traversal,
   layerSummary,
   onApplyPreset,
   onUpdateGraphConfig,
   onUpdateRows,
+  onUpdateBlockSpread,
+  onUpdateSpanExponent,
+  onUpdateEdgeBundling,
   onUpdateOrdering,
   onUpdateTraversal,
 }: ControlPanelProps) {
@@ -132,7 +144,7 @@ export default function ControlPanel({
         <div className="panel__subtitle">紧凑布局</div>
 
         <label className="field">
-          <span>每层行数</span>
+          <span>最大块内行数</span>
           <input
             type="range"
             min="1"
@@ -141,6 +153,34 @@ export default function ControlPanel({
             onChange={(event) => onUpdateRows(Number(event.target.value))}
           />
           <strong>{rowsPerLayer}</strong>
+        </label>
+
+        <label className="field">
+          <span>块间分散</span>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={blockSpread}
+            onChange={(event) => onUpdateBlockSpread(Number(event.target.value))}
+          />
+          <strong>{Math.round(blockSpread * 100)}%</strong>
+        </label>
+
+        <label className="field">
+          <span>跨层边权重</span>
+          <select value={spanExponent} onChange={(event) => onUpdateSpanExponent(Number(event.target.value))}>
+            <option value="1">跨度（线性）</option>
+            <option value="2">跨度²（平方）</option>
+            <option value="3">跨度³（立方）</option>
+          </select>
+        </label>
+
+        <label className="field field--toggle">
+          <span>Edge bundle（同块对捆绑）</span>
+          <input type="checkbox" checked={edgeBundling}
+            onChange={(event) => onUpdateEdgeBundling(event.target.checked)} />
         </label>
 
         <label className="field">
@@ -161,7 +201,7 @@ export default function ControlPanel({
         </label>
 
         <div className="panel__note">
-          右侧当前使用块化 2D 层：区块先按拓扑相似性形成连续段，并沿层主轴做 1D 排列；Hilbert 仍先用蛇形近似。
+          区块按拓扑相似性形成连续段；跨层边按跨度的幂次加权，分块会额外避免把跨层边端点与普通节点混合。Edge bundle 仅改变二维视图的绘制，同一对块的多条边共用主干。块内行数按层节点数调整。块间分散控制把剩余水平空间分给相邻块的比例。Hilbert 仍先用蛇形近似。
         </div>
       </div>
     </aside>

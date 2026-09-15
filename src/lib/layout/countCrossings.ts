@@ -73,3 +73,12 @@ export function countCrossings(layout: PositionedLayout) {
 
   return crossings;
 }
+
+export function totalEdgeLength(layout: PositionedLayout) {
+  const nodes = new Map(layout.nodes.map((node) => [node.id, node]));
+  return layout.edges.reduce((sum, edge) => {
+    const source = nodes.get(edge.source);
+    const target = nodes.get(edge.target);
+    return source && target ? sum + Math.hypot(target.x - source.x, target.y - source.y) : sum;
+  }, 0);
+}

@@ -38,6 +38,14 @@ function MetricCard({
           <dt>交叉数</dt>
           <dd>{layout.metrics.crossings}</dd>
         </div>
+        {layout.metrics.blockInversions !== undefined && <div>
+          <dt>块级反序</dt>
+          <dd>{layout.metrics.blockInversions}</dd>
+        </div>}
+        {layout.metrics.totalEdgeLength !== undefined && <div>
+          <dt>绘制边总长度</dt>
+          <dd>{Math.round(layout.metrics.totalEdgeLength)}</dd>
+        </div>}
       </dl>
     </div>
   );

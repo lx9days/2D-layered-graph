@@ -6,12 +6,18 @@ interface DemoState {
   activePreset: PresetSelection;
   graphConfig: GraphConfig;
   rowsPerLayer: number;
+  blockSpread: number;
+  spanExponent: number;
+  edgeBundling: boolean;
   ordering: OrderingStrategy;
   traversal: TraversalStrategy;
   hoveredNodeId: string | null;
   applyPreset: (presetKey: PresetKey) => void;
   updateGraphConfig: (patch: Partial<GraphConfig>) => void;
   updateRowsPerLayer: (rows: number) => void;
+  updateBlockSpread: (spread: number) => void;
+  updateSpanExponent: (exponent: number) => void;
+  updateEdgeBundling: (enabled: boolean) => void;
   updateOrdering: (ordering: OrderingStrategy) => void;
   updateTraversal: (traversal: TraversalStrategy) => void;
   setHoveredNodeId: (nodeId: string | null) => void;
@@ -23,6 +29,9 @@ export const useDemoStore = create<DemoState>((set) => ({
   activePreset: initialPreset.key,
   graphConfig: { ...initialPreset.graph },
   rowsPerLayer: initialPreset.rowsPerLayer,
+  blockSpread: 0.7,
+  spanExponent: 2,
+  edgeBundling: false,
   ordering: 'barycenter',
   traversal: 'serpentine',
   hoveredNodeId: null,
@@ -55,6 +64,12 @@ export const useDemoStore = create<DemoState>((set) => ({
       rowsPerLayer: rows,
       hoveredNodeId: null,
     })),
+  updateBlockSpread: (spread) =>
+    set(() => ({ activePreset: 'custom', blockSpread: spread, hoveredNodeId: null })),
+  updateSpanExponent: (exponent) =>
+    set(() => ({ activePreset: 'custom', spanExponent: exponent, hoveredNodeId: null })),
+  updateEdgeBundling: (enabled) =>
+    set(() => ({ edgeBundling: enabled, hoveredNodeId: null })),
   updateOrdering: (ordering) =>
     set(() => ({
       activePreset: 'custom',

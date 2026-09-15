@@ -27,27 +27,38 @@ export function buildLayouts(
   traversal: TraversalStrategy,
   rowsPerLayer: number,
   sampleMaxRows = 8,
+  blockSpread = 0.7,
+  spanExponent = 2,
 ): LayoutBundle {
   const orderedGraph = orderNodes(graph, ordering);
   const traditional = layoutSugiyama(graph);
   const compact = layoutBlockCompact(
-    orderedGraph,
+    graph,
     rowsPerLayer,
     traversal === 'hilbert' ? 'serpentine' : traversal,
+    ordering,
+    undefined,
+    blockSpread,
+    spanExponent,
   );
   const tradeoffPoints: TradeoffPoint[] = [];
 
   for (let rows = 1; rows <= sampleMaxRows; rows += 1) {
-    const sample = layoutBlockCompact(
-      orderedGraph,
+    const sample = rows === rowsPerLayer ? compact : layoutBlockCompact(
+      graph,
       rows,
       traversal === 'hilbert' ? 'serpentine' : traversal,
+      ordering,
+      undefined,
+      blockSpread,
+      spanExponent,
     );
     tradeoffPoints.push({
       rows,
       width: sample.metrics.width,
       crossings: sample.metrics.crossings,
       height: sample.metrics.height,
+      totalEdgeLength: sample.metrics.totalEdgeLength,
     });
   }
 

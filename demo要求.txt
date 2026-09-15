@@ -1,0 +1,621 @@
+# Build an Interactive Demo for Compact 2D Layered Graph Drawing
+
+I am exploring a graph visualization research idea and want to build a prototype/demo to understand its behavior before developing the full algorithm.
+
+Please implement an interactive web demo that compares a conventional layered graph layout with a compact 2D-layer layout.
+
+## 1. Research Motivation
+
+Consider a directed layered graph
+
+$$
+G=(V,E)
+$$
+
+where nodes are assigned to ordered layers
+
+$$
+L_1,L_2,\ldots,L_k.
+$$
+
+In conventional layered graph drawing (e.g., Sugiyama-style layouts), all nodes in one layer are arranged along a horizontal line:
+
+```text
+Layer 1
+
+● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ●
+
+       \   |  /       \      /       |
+
+Layer 2
+
+● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ●
+```
+
+This works well when every layer contains relatively few nodes.
+
+However, if one layer contains hundreds of nodes, the required width can become extremely large.
+
+The research question is:
+
+> Can we allow each layer to occupy a compact 2D region instead of requiring it to be a 1D horizontal line, while reducing drawing width without introducing too many edge crossings?
+
+The important conceptual change is:
+
+```text
+Traditional:
+
+Layer = 1D ordered line
+
+● ● ● ● ● ● ● ● ● ● ● ●
+
+
+Proposed:
+
+Layer = compact 2D region
+
+┌──────────────┐
+│ ● ● ● ● ●    │
+│ ● ● ● ● ●    │
+│ ● ● ● ● ●    │
+└──────────────┘
+```
+
+The layer hierarchy must still be preserved.
+
+If
+
+$$
+L_i < L_{i+1},
+$$
+
+then the region occupied by \(L_i\) should remain visually above the region occupied by \(L_{i+1}\).
+
+---
+
+# 2. Important Clarification: Do NOT Treat SFC as a Strict Grid Constraint
+
+Space-filling curves (SFCs), such as Hilbert curves or serpentine traversals, are only an inspiration / initialization mechanism.
+
+Nodes do NOT need to remain fixed to exact grid cells.
+
+Think of the process as:
+
+$$
+\text{1D node ordering}
+\rightarrow
+\text{SFC / wrapped initialization}
+\rightarrow
+\text{2D node positions}
+$$
+
+The final node coordinates may be continuous:
+
+$$
+p(v)=(x_v,y_v).
+$$
+
+The goal is NOT:
+
+> faithfully reproduce a Hilbert curve.
+
+The actual goal is:
+
+> reduce graph width while keeping edge crossings low.
+
+Therefore, the SFC should be treated as an ordering/locality prior rather than a hard geometric constraint.
+
+---
+
+# 3. Concept of Layer Wrapping
+
+Start from an ordinary 1D layer:
+
+```text
+● ● ● ● ● ● ● ● ● ● ● ●
+```
+
+Allow it to gradually occupy multiple rows:
+
+```text
+● ● ● ● ● ●
+● ● ● ● ● ●
+```
+
+and then:
+
+```text
+● ● ● ●
+● ● ● ●
+● ● ● ●
+```
+
+This can be understood as "layer wrapping" or "2D layer compaction."
+
+The number of rows should be adjustable.
+
+For example, for 24 nodes:
+
+```text
+rows = 1
+
+● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ● ●
+
+
+rows = 2
+
+● ● ● ● ● ● ● ● ● ● ● ●
+● ● ● ● ● ● ● ● ● ● ● ●
+
+
+rows = 4
+
+● ● ● ● ● ●
+● ● ● ● ● ●
+● ● ● ● ● ●
+● ● ● ● ● ●
+```
+
+Increasing the number of rows reduces width but increases the vertical extent of the layer.
+
+This creates the main trade-off we want to investigate:
+
+$$
+\text{drawing width}
+\leftrightarrow
+\text{edge crossings}.
+$$
+
+---
+
+# 4. Demo Interface
+
+Create a single-page web application.
+
+Prefer React + TypeScript + D3.js, but a simpler stack is acceptable if it makes the prototype easier to modify.
+
+The page should contain two large visualization panels side by side.
+
+## Left: Conventional Layered Layout
+
+Show the graph using a standard layered layout.
+
+Each layer should be a horizontal line.
+
+For example:
+
+```text
+L1   ● ● ● ● ● ● ● ● ● ● ● ● ● ●
+
+       \   |   /  \       /  |
+
+L2   ● ● ● ● ● ● ● ● ● ● ● ● ● ●
+
+          \    /      |
+
+L3   ● ● ● ● ● ● ● ● ● ● ● ● ● ●
+```
+
+This serves as the baseline.
+
+## Right: Compact 2D Layer Layout
+
+Use exactly the same graph, but allow every layer to occupy multiple rows.
+
+For example:
+
+```text
+        ┌──────────────┐
+L1      │ ● ● ● ● ●    │
+        │ ● ● ● ● ●    │
+        │ ● ● ● ● ●    │
+        └──────────────┘
+
+             ↓ edges
+
+        ┌──────────────┐
+L2      │ ● ● ● ● ●    │
+        │ ● ● ● ● ●    │
+        └──────────────┘
+
+             ↓ edges
+
+        ┌──────────────┐
+L3      │ ● ● ● ● ●    │
+        │ ● ● ● ● ●    │
+        └──────────────┘
+```
+
+Draw a subtle bounding box/background for each layer region so that the concept of a "2D layer" is visually obvious.
+
+---
+
+# 5. Controls
+
+Add a control panel.
+
+### Graph size
+
+Provide controls for:
+
+* number of layers;
+* nodes per layer;
+* edge density;
+* random seed.
+
+Useful defaults:
+
+```text
+layers = 4
+nodes per layer = 30
+edge density = moderate
+```
+
+Also provide presets:
+
+```text
+Small
+Medium
+Wide Layer
+Very Wide Layer
+```
+
+The "Wide Layer" preset should intentionally create an imbalanced graph such as:
+
+```text
+L1: 15 nodes
+L2: 80 nodes
+L3: 25 nodes
+L4: 15 nodes
+```
+
+because this is an important motivating scenario.
+
+---
+
+# 6. Layer Wrapping Control
+
+Provide a slider:
+
+```text
+Rows per Layer
+
+1 ─────────────── 8
+```
+
+or alternatively:
+
+```text
+Maximum Layer Width
+
+large ───────── small
+```
+
+When rows = 1, the compact layout should approximately reduce to the traditional layered layout.
+
+When rows increase, nodes should progressively occupy more vertical space and less horizontal space.
+
+The transition should be animated so that I can visually understand how the layer changes from 1D to 2D.
+
+---
+
+# 7. Different Initial Traversal Strategies
+
+Allow switching among at least:
+
+```text
+Row-major
+Serpentine
+Hilbert (if convenient)
+```
+
+Row-major:
+
+```text
+1  2  3  4
+5  6  7  8
+9 10 11 12
+```
+
+Serpentine:
+
+```text
+1 → 2 → 3 → 4
+            ↓
+8 ← 7 ← 6 ← 5
+↓
+9 →10 →11→12
+```
+
+Hilbert can be implemented only if straightforward.
+
+Do not spend excessive time implementing a mathematically perfect Hilbert curve in the first prototype.
+
+Row-major and serpentine are sufficient for the initial demo.
+
+---
+
+# 8. Node Ordering
+
+Before wrapping a layer, provide at least two node ordering strategies:
+
+```text
+Original/random order
+Barycenter ordering
+```
+
+The barycenter ordering should use neighboring-layer node positions/order in a standard layered-graph fashion.
+
+This is important because we want to distinguish:
+
+$$
+\text{node ordering}
+$$
+
+from
+
+$$
+\text{2D wrapping}.
+$$
+
+The pipeline should conceptually be:
+
+```text
+Graph
+   ↓
+Layer assignment
+   ↓
+Node ordering
+   ↓
+2D wrapping
+   ↓
+Edge drawing
+```
+
+---
+
+# 9. Edge Rendering
+
+Initially draw edges as straight line segments between node centers.
+
+Do NOT implement sophisticated edge routing yet.
+
+We first want to understand whether the basic representation is promising.
+
+Use slight transparency for edges so dense regions remain visible.
+
+On hover over a node:
+
+* highlight the node;
+* highlight all incident edges;
+* dim unrelated edges.
+
+This will make path structure easier to inspect.
+
+---
+
+# 10. Crossing Detection
+
+Implement an edge-crossing counter.
+
+At minimum, count intersections between straight-line edges connecting consecutive layers.
+
+Ignore intersections occurring exactly at shared endpoints.
+
+Display:
+
+```text
+Traditional Layout
+Width: xxxx
+Height: xxxx
+Crossings: xxxx
+
+Compact Layout
+Width: xxxx
+Height: xxxx
+Crossings: xxxx
+```
+
+Also calculate:
+
+```text
+Width reduction: xx%
+Crossing change: +xx% / -xx%
+```
+
+This is one of the most important parts of the prototype.
+
+---
+
+# 11. Visualize the Trade-off
+
+Add a small scatterplot showing layouts generated with different row counts.
+
+Use:
+
+```text
+x-axis = layout width
+y-axis = number of edge crossings
+```
+
+For example:
+
+```text
+Crossings
+   ↑
+
+   ● rows=1
+
+       ● rows=2
+
+           ● rows=3
+
+               ● rows=4
+
+   └────────────────────→ Width
+```
+
+Clicking a point should set the compact visualization to that row count.
+
+This lets us visually inspect the width–crossing trade-off.
+
+---
+
+# 12. Optional: Free / Deformable Node Positions
+
+After the basic wrapped layout works, add an optional experimental mode:
+
+```text
+[ ] Enable local 2D optimization
+```
+
+When enabled, nodes should be allowed to move slightly away from their initial wrapped positions.
+
+Do NOT require them to remain on exact grid cells.
+
+Each node should remain inside its own layer region.
+
+Use a simple heuristic, not a sophisticated optimizer.
+
+For example, try local candidate movements and accept a movement if it reduces an objective such as
+
+$$
+E =
+C
++
+\lambda_L L
++
+\lambda_D D,
+$$
+
+where
+
+* \(C\) = edge crossings;
+* \(L\) = total edge length;
+* \(D\) = displacement from the initial wrapped position.
+
+Node overlap must not be allowed.
+
+The purpose is only to visually test whether giving nodes additional 2D freedom can further reduce crossings.
+
+Please keep this optimization modular so it can later be replaced by a more sophisticated algorithm.
+
+---
+
+# 13. Important Architectural Requirement
+
+Separate the implementation into modules/functions corresponding roughly to:
+
+```text
+generateGraph()
+
+assignLayers()
+
+orderNodes()
+
+wrapLayer()
+
+optimize2DPositions()
+
+countCrossings()
+
+computeMetrics()
+
+renderGraph()
+```
+
+Do not tightly couple the visualization code with the layout algorithm.
+
+I want to experiment with alternative algorithms later.
+
+Represent a node approximately as:
+
+```ts
+interface Node {
+    id: string;
+    layer: number;
+
+    order: number;
+
+    x: number;
+    y: number;
+
+    initialX?: number;
+    initialY?: number;
+}
+```
+
+and an edge as:
+
+```ts
+interface Edge {
+    source: string;
+    target: string;
+}
+```
+
+---
+
+# 14. What I Want to Learn from This Demo
+
+This prototype is NOT intended to demonstrate a final algorithm.
+
+It should help answer the following questions visually:
+
+1. How much width can be saved by allowing a layer to occupy 2D space?
+
+2. How quickly do edge crossings increase as a layer becomes more compact?
+
+3. Can some amount of wrapping reduce width substantially without dramatically increasing crossings?
+
+4. Does serpentine/SFC-style ordering perform differently from simple row-major packing?
+
+5. Does allowing nodes to move freely inside the 2D layer region improve the result?
+
+6. For graphs with one extremely large layer, does a 2D layer representation look substantially more useful than a traditional 1D layer?
+
+The central conceptual comparison is:
+
+```text
+Traditional layered drawing
+
+Layer = 1D line
+
+        ↓
+
+Compact layered drawing
+
+Layer = bounded 2D region
+```
+
+and the primary quantitative trade-off is:
+
+$$
+\boxed{
+\text{Width}
+\leftrightarrow
+\text{Edge Crossings}
+}
+$$
+
+---
+
+# 15. First Implementation Priority
+
+Please prioritize getting a working visual prototype rather than implementing a sophisticated optimization algorithm.
+
+Implementation order:
+
+1. Generate a layered graph.
+2. Render conventional 1D layout.
+3. Render wrapped 2D layout.
+4. Add row-count / maximum-width control.
+5. Add row-major and serpentine traversal.
+6. Calculate width and crossing count.
+7. Add width-vs-crossings scatterplot.
+8. Add animation between wrapping levels.
+9. Only then add simple local 2D optimization if time permits.
+
+Make the interface clean and research-prototype-like rather than highly decorative.
+
+Most importantly, I want to be able to manipulate the same graph interactively and immediately see how changing a layer from a 1D line into a compact 2D region affects its width and edge crossings.

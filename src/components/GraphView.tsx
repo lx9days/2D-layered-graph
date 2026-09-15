@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { planEdgeBundles } from '@/lib/layout/edgeBundles';
 import type { PositionedLayout } from '@/types/graph';
 
 interface GraphViewProps {
@@ -6,6 +8,7 @@ interface GraphViewProps {
   layout: PositionedLayout;
   hoveredNodeId: string | null;
   onHoverNode: (nodeId: string | null) => void;
+  edgeBundling?: boolean;
 }
 
 const palette = ['#7dd3fc', '#34d399', '#fbbf24', '#fb7185', '#c084fc', '#22d3ee'];
@@ -16,7 +19,10 @@ export default function GraphView({
   layout,
   hoveredNodeId,
   onHoverNode,
+  edgeBundling = false,
 }: GraphViewProps) {
+  const bundlePlan = useMemo(() => edgeBundling && layout.mode === 'compact'
+    ? planEdgeBundles(layout) : null, [edgeBundling, layout]);
   const incidentNodeIds = new Set<string>();
   const incidentEdgeKeys = new Set<string>();
 
@@ -86,7 +92,41 @@ export default function GraphView({
           />
         ))}
 
-        {layout.edges.map((edge) => {
+        {bundlePlan?.bundles.map((bundle) => {
+          const { sourceJunction: start, targetJunction: end } = bundle;
+          const isIncident = bundle.edges.some((edge) => incidentEdgeKeys.has(`${edge.source}->${edge.target}`));
+          const isDimmed = hoveredNodeId ? !isIncident : false;
+          const middleY = (start.y + end.y) / 2;
+          return (
+            <g key={bundle.key}>
+              <path
+                d={`M ${start.x} ${start.y} C ${start.x} ${middleY} ${end.x} ${middleY} ${end.x} ${end.y}`}
+                className={`edge-line edge-line--trunk${isDimmed ? ' edge-line--dimmed' : ''}${isIncident ? ' edge-line--active' : ''}`}
+                style={{ strokeWidth: isIncident ? 2.8 : Math.min(3.2, 1.5 + Math.log2(bundle.edges.length) * 0.35) }}
+              />
+              {[...new Set(bundle.edges.map((edge) => edge.source))].map((sourceId) => {
+                const source = nodeMap.get(sourceId);
+                if (!source) return null;
+                const active = bundle.edges.some((edge) => edge.source === sourceId
+                  && incidentEdgeKeys.has(`${edge.source}->${edge.target}`));
+                return <path key={`source-${sourceId}`}
+                  d={`M ${source.x} ${source.y} C ${source.x} ${(source.y + start.y) / 2} ${start.x} ${(source.y + start.y) / 2} ${start.x} ${start.y}`}
+                  className={`edge-line edge-line--branch${hoveredNodeId && !active ? ' edge-line--dimmed' : ''}${active ? ' edge-line--active' : ''}`} />;
+              })}
+              {[...new Set(bundle.edges.map((edge) => edge.target))].map((targetId) => {
+                const target = nodeMap.get(targetId);
+                if (!target) return null;
+                const active = bundle.edges.some((edge) => edge.target === targetId
+                  && incidentEdgeKeys.has(`${edge.source}->${edge.target}`));
+                return <path key={`target-${targetId}`}
+                  d={`M ${end.x} ${end.y} C ${end.x} ${(end.y + target.y) / 2} ${target.x} ${(end.y + target.y) / 2} ${target.x} ${target.y}`}
+                  className={`edge-line edge-line--branch${hoveredNodeId && !active ? ' edge-line--dimmed' : ''}${active ? ' edge-line--active' : ''}`} />;
+              })}
+            </g>
+          );
+        })}
+
+        {(bundlePlan?.singleEdges ?? layout.edges).map((edge) => {
           const source = nodeMap.get(edge.source);
           const target = nodeMap.get(edge.target);
 

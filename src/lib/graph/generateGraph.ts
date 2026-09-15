@@ -21,6 +21,87 @@ function sampleUniqueIndices(count: number, pickCount: number, random: () => num
   return Array.from(set);
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function sampleWeightedIndex(weights: number[], random: () => number, excluded: Set<number>) {
+  let total = 0;
+
+  weights.forEach((weight, index) => {
+    if (!excluded.has(index)) {
+      total += Math.max(0, weight);
+    }
+  });
+
+  if (total <= 0) {
+    const available = weights
+      .map((_, index) => index)
+      .filter((index) => !excluded.has(index));
+
+    return available.length > 0
+      ? available[Math.floor(random() * available.length)]
+      : -1;
+  }
+
+  let cursor = random() * total;
+
+  for (let index = 0; index < weights.length; index += 1) {
+    if (excluded.has(index)) {
+      continue;
+    }
+
+    cursor -= Math.max(0, weights[index]);
+
+    if (cursor <= 0) {
+      return index;
+    }
+  }
+
+  return weights.findIndex((_, index) => !excluded.has(index));
+}
+
+function sampleWeightedUniqueIndices(weights: number[], pickCount: number, random: () => number) {
+  const picks: number[] = [];
+  const excluded = new Set<number>();
+  const targetCount = Math.min(weights.length, Math.max(0, pickCount));
+
+  while (picks.length < targetCount) {
+    const next = sampleWeightedIndex(weights, random, excluded);
+
+    if (next < 0) {
+      break;
+    }
+
+    excluded.add(next);
+    picks.push(next);
+  }
+
+  return picks;
+}
+
+function buildLayerWeights(size: number, random: () => number) {
+  const hotspotCenter = random();
+  const hotspotWidth = 0.08 + random() * 0.26;
+  const waveFrequency = 1.2 + random() * 2.2;
+  const hubIndices = sampleUniqueIndices(
+    size,
+    Math.min(size, Math.max(1, Math.round(size * (0.12 + random() * 0.08)))),
+    random,
+  );
+  const hubSet = new Set(hubIndices);
+
+  return Array.from({ length: size }, (_, index) => {
+    const normalized = size <= 1 ? 0.5 : index / (size - 1);
+    const hotspot = Math.exp(-((normalized - hotspotCenter) ** 2) / Math.max(0.0025, hotspotWidth ** 2));
+    const wave = 0.65 + 0.45 * Math.sin((normalized + random() * 0.1) * Math.PI * waveFrequency);
+    const hubBoost = hubSet.has(index) ? 1.8 + random() * 2.8 : 0;
+    const leafPenalty = random() < 0.18 ? 0.35 + random() * 0.2 : 1;
+
+    return Math.max(0.12, (0.55 + hotspot + wave + hubBoost) * leafPenalty);
+  });
+}
+
 function resolveLayerSizes(config: GraphConfig) {
   if (config.customLayerSizes?.length) {
     return config.customLayerSizes.slice();
@@ -54,26 +135,54 @@ export function generateGraph(config: GraphConfig): LayeredGraph {
     layers.push(layerNodes);
   });
 
+  const edgeKeys = new Set<string>();
+  const addEdge = (source: string, target: string) => {
+    const key = `${source}->${target}`;
+
+    if (edgeKeys.has(key)) {
+      return false;
+    }
+
+    edgeKeys.add(key);
+    edges.push({ source, target });
+    return true;
+  };
+
   for (let layerIndex = 0; layerIndex < layers.length - 1; layerIndex += 1) {
     const sourceLayer = layers[layerIndex];
     const targetLayer = layers[layerIndex + 1];
-    const usedPairs = new Set<string>();
-    const fanoutBase = Math.max(1, Math.round(1 + config.edgeDensity * Math.sqrt(targetLayer.length) * 2.35));
+    const fanoutBase = Math.max(1, Math.round(1 + config.edgeDensity * Math.sqrt(targetLayer.length) * 1.7));
+    const sourceWeights = buildLayerWeights(sourceLayer.length, random);
+    const targetWeights = buildLayerWeights(targetLayer.length, random);
+    const layerSkew = random() * 0.7 - 0.35;
+    const locality = 0.8 + random() * 2.1;
 
     sourceLayer.forEach((sourceId, sourceIndex) => {
-      const maxTargets = Math.min(targetLayer.length, fanoutBase + (sourceIndex % 3 === 0 ? 1 : 0));
-      const picks = sampleUniqueIndices(targetLayer.length, maxTargets, random);
+      const sourceStrength = sourceWeights[sourceIndex] ?? 1;
+      const normalizedSource = sourceLayer.length <= 1 ? 0.5 : sourceIndex / (sourceLayer.length - 1);
+      const preferredCenter = clamp(
+        normalizedSource * (0.65 + random() * 0.7) + layerSkew + (random() - 0.5) * 0.24,
+        0,
+        1,
+      );
+      const fanoutCap = Math.min(targetLayer.length, fanoutBase + 3 + Math.round(random() * 2));
+      const maxTargets = clamp(
+        Math.round(1 + fanoutBase * (0.3 + sourceStrength * 0.34)),
+        1,
+        fanoutCap,
+      );
+      const targetPreference = targetWeights.map((baseWeight, targetIndex) => {
+        const normalizedTarget = targetLayer.length <= 1 ? 0.5 : targetIndex / (targetLayer.length - 1);
+        const distance = Math.abs(normalizedTarget - preferredCenter);
+        const localityScore = 0.45 + 0.95 / (1 + distance * locality * 4);
+        const bridgeBonus = distance > 0.32 ? 0.14 + random() * 0.18 : 0;
+
+        return baseWeight * localityScore + bridgeBonus;
+      });
+      const picks = sampleWeightedUniqueIndices(targetPreference, maxTargets, random);
 
       picks.forEach((targetIndex) => {
-        const pairKey = `${sourceId}->${targetLayer[targetIndex]}`;
-
-        if (!usedPairs.has(pairKey)) {
-          usedPairs.add(pairKey);
-          edges.push({
-            source: sourceId,
-            target: targetLayer[targetIndex],
-          });
-        }
+        addEdge(sourceId, targetLayer[targetIndex]);
       });
     });
 
@@ -81,18 +190,40 @@ export function generateGraph(config: GraphConfig): LayeredGraph {
       const hasIncoming = edges.some((edge) => edge.target === targetId && edge.source.startsWith(`L${layerIndex + 1}-`));
 
       if (!hasIncoming) {
-        const fallbackSource = sourceLayer[Math.floor(random() * sourceLayer.length)];
-        const pairKey = `${fallbackSource}->${targetId}`;
+        const fallbackIndex = sampleWeightedIndex(sourceWeights, random, new Set<number>());
 
-        if (!usedPairs.has(pairKey)) {
-          usedPairs.add(pairKey);
-          edges.push({
-            source: fallbackSource,
-            target: targetId,
-          });
+        if (fallbackIndex >= 0) {
+          addEdge(sourceLayer[fallbackIndex], targetId);
         }
       }
     });
+  }
+
+  for (let layerIndex = 0; layerIndex < layers.length - 2; layerIndex += 1) {
+    const sourceLayer = layers[layerIndex];
+    const maxSpan = Math.min(3, layers.length - layerIndex - 1);
+
+    if (maxSpan < 2) {
+      continue;
+    }
+
+    const sourceWeights = buildLayerWeights(sourceLayer.length, random);
+    const longEdgeBudget = Math.max(1, Math.round(sourceLayer.length * config.edgeDensity * 0.18));
+
+    for (let edgeIndex = 0; edgeIndex < longEdgeBudget; edgeIndex += 1) {
+      const span = 2 + Math.floor(random() * (maxSpan - 1));
+      const targetLayerIndex = layerIndex + span;
+      const targetLayer = layers[targetLayerIndex];
+      const targetWeights = buildLayerWeights(targetLayer.length, random);
+      const sourceIndex = sampleWeightedIndex(sourceWeights, random, new Set<number>());
+      const targetIndex = sampleWeightedIndex(targetWeights, random, new Set<number>());
+
+      if (sourceIndex < 0 || targetIndex < 0) {
+        continue;
+      }
+
+      addEdge(sourceLayer[sourceIndex], targetLayer[targetIndex]);
+    }
   }
 
   return {
@@ -118,40 +249,41 @@ export const presets: Record<PresetKey, DemoPreset> = {
   medium: {
     key: 'medium',
     label: 'Medium',
-    description: '4 层，均衡规模，适合作为默认研究视图。',
+    description: '6 层，包含接近 200 节点的宽层，并混入跨层边作为默认研究视图。',
     graph: {
-      layerCount: 4,
-      nodesPerLayer: 30,
-      edgeDensity: 0.32,
-      seed: 11,
+      layerCount: 6,
+      nodesPerLayer: 48,
+      customLayerSizes: [36, 118, 192, 74, 156, 29],
+      edgeDensity: 0.19,
+      seed: 71,
     },
-    rowsPerLayer: 3,
+    rowsPerLayer: 6,
   },
   'wide-layer': {
     key: 'wide-layer',
     label: 'Wide Layer',
-    description: '中间层显著变宽，用于模拟研究动机场景。',
+    description: '中间层接近 180 节点，用于模拟更极端的宽层场景。',
     graph: {
-      layerCount: 4,
-      nodesPerLayer: 30,
-      customLayerSizes: [15, 80, 25, 15],
-      edgeDensity: 0.3,
-      seed: 19,
+      layerCount: 5,
+      nodesPerLayer: 44,
+      customLayerSizes: [28, 176, 63, 149, 24],
+      edgeDensity: 0.18,
+      seed: 83,
     },
-    rowsPerLayer: 4,
+    rowsPerLayer: 6,
   },
   'very-wide-layer': {
     key: 'very-wide-layer',
     label: 'Very Wide Layer',
-    description: '极宽第二层，便于观察压缩收益与交叉变化。',
+    description: '极宽第二层接近 200 节点，便于观察压缩收益与交叉变化。',
     graph: {
-      layerCount: 4,
-      nodesPerLayer: 40,
-      customLayerSizes: [20, 140, 32, 20],
-      edgeDensity: 0.28,
-      seed: 23,
+      layerCount: 5,
+      nodesPerLayer: 52,
+      customLayerSizes: [34, 196, 58, 168, 26],
+      edgeDensity: 0.17,
+      seed: 97,
     },
-    rowsPerLayer: 6,
+    rowsPerLayer: 7,
   },
 };
 

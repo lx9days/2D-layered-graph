@@ -315,8 +315,19 @@ button {
 }
 
 .edge-line {
+  fill: none;
   stroke: rgba(156, 163, 175, 0.5);
   stroke-width: 1.1;
+}
+
+.edge-line--trunk {
+  stroke: rgba(107, 114, 128, 0.6);
+  stroke-linecap: round;
+}
+
+.edge-line--branch {
+  stroke: rgba(156, 163, 175, 0.38);
+  stroke-width: 0.9;
 }
 
 .edge-line--active {
@@ -326,6 +337,18 @@ button {
 
 .edge-line--dimmed {
   stroke: rgba(209, 213, 219, 0.6);
+}
+
+.field--toggle {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field--toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #2563eb;
 }
 
 .node-dot {

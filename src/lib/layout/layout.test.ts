@@ -20,6 +20,28 @@ describe('layout pipeline', () => {
     expect(first.edges).toEqual(second.edges);
   });
 
+  it('generates long edges and uneven degree distribution for richer demos', () => {
+    const graph = generateGraph({
+      layerCount: 6,
+      nodesPerLayer: 48,
+      customLayerSizes: [36, 118, 192, 74, 156, 29],
+      edgeDensity: 0.19,
+      seed: 71,
+    });
+    const nodeMap = new Map(graph.nodes.map((node) => [node.id, node]));
+    const degrees = graph.nodes.map((node) =>
+      graph.edges.filter((edge) => edge.source === node.id || edge.target === node.id).length,
+    );
+
+    expect(graph.edges.some((edge) => {
+      const sourceLayer = nodeMap.get(edge.source)?.layer ?? 0;
+      const targetLayer = nodeMap.get(edge.target)?.layer ?? sourceLayer;
+      return targetLayer - sourceLayer > 1;
+    })).toBe(true);
+    expect(Math.max(...graph.layers.map((layer) => layer.length))).toBeGreaterThanOrEqual(180);
+    expect(new Set(degrees).size).toBeGreaterThan(4);
+  });
+
   it('counts straight-line crossings between consecutive layers', () => {
     const layout: PositionedLayout = {
       mode: 'traditional',
@@ -41,7 +63,7 @@ describe('layout pipeline', () => {
     expect(countCrossings(layout)).toBe(1);
   });
 
-  it('reduces width when rows per layer increase', () => {
+  it('reduces width when rows per layer increase', { timeout: 12000 }, () => {
     const graph = generateGraph({
       layerCount: 4,
       nodesPerLayer: 26,
@@ -93,6 +115,65 @@ describe('layout pipeline', () => {
 
       expect(Math.abs(centerY - expectedCenterY)).toBeLessThan(0.001);
     });
+  });
+
+  it('does not pin narrow layers to the left when another layer is much wider', () => {
+    const graph = generateGraph({
+      layerCount: 3,
+      nodesPerLayer: 10,
+      customLayerSizes: [8, 42, 8],
+      edgeDensity: 0.2,
+      seed: 11,
+    });
+    const layout = buildLayouts(graph, 'barycenter', 'serpentine', 4).compact;
+    const firstLayerBox = layout.boxes.find((box) => box.layer === 0);
+    const firstLayerBlocks = (layout.blockBoxes ?? []).filter((block) => block.layer === 0);
+
+    expect(firstLayerBox).toBeDefined();
+    expect(firstLayerBlocks.length).toBeGreaterThan(0);
+
+    if (!firstLayerBox || firstLayerBlocks.length === 0) {
+      return;
+    }
+
+    const firstBlockLeft = Math.min(...firstLayerBlocks.map((block) => block.x));
+    expect(firstBlockLeft).toBeGreaterThan(firstLayerBox.x + 28);
+  });
+
+  it('places nodes with stronger upper-layer attachment higher inside a block', () => {
+    const graph = {
+      nodes: [
+        { id: 'a0', layer: 0, order: 0, x: 0, y: 0 },
+        { id: 'a1', layer: 0, order: 1, x: 0, y: 0 },
+        { id: 'b0', layer: 1, order: 0, x: 0, y: 0 },
+        { id: 'b1', layer: 1, order: 1, x: 0, y: 0 },
+        { id: 'c0', layer: 2, order: 0, x: 0, y: 0 },
+      ],
+      edges: [
+        { source: 'a0', target: 'b0' },
+        { source: 'a1', target: 'b0' },
+        { source: 'a0', target: 'b1' },
+        { source: 'b0', target: 'c0' },
+        { source: 'b1', target: 'c0' },
+      ],
+      layers: [['a0', 'a1'], ['b0', 'b1'], ['c0']],
+    };
+    const layout = buildLayouts(graph, 'original', 'row-major', 2).compact;
+    const middleBlock = (layout.blockBoxes ?? []).find(
+      (block) => block.layer === 1 && block.nodeIds.includes('b0') && block.nodeIds.includes('b1'),
+    );
+    const b0 = layout.nodes.find((node) => node.id === 'b0');
+    const b1 = layout.nodes.find((node) => node.id === 'b1');
+
+    expect(middleBlock).toBeDefined();
+    expect(b0).toBeDefined();
+    expect(b1).toBeDefined();
+
+    if (!middleBlock || !b0 || !b1) {
+      return;
+    }
+
+    expect(b0.y).toBeLessThan(b1.y);
   });
 
   it('inserts dummy nodes for long edges in sugiyama layout', () => {

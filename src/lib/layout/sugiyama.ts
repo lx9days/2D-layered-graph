@@ -1,4 +1,4 @@
-import { countCrossings } from '@/lib/layout/countCrossings';
+import { countCrossings, totalEdgeLength } from '@/lib/layout/countCrossings';
 import type { GraphEdge, GraphNode, LayeredGraph, LayoutBox, PositionedLayout } from '@/types/graph';
 
 const OUTER_PADDING = 64;
@@ -211,84 +211,41 @@ function sortLayerByMedian(
     .map((entry) => entry.nodeId);
 }
 
-function countAdjacentLayerCrossings(upper: string[], lower: string[], edges: InternalEdge[]) {
-  const upperPos = new Map(upper.map((nodeId, index) => [nodeId, index]));
-  const lowerPos = new Map(lower.map((nodeId, index) => [nodeId, index]));
-  const filtered = edges
-    .map((edge) => ({
-      source: upperPos.get(edge.source),
-      target: lowerPos.get(edge.target),
-    }))
-    .filter((edge): edge is { source: number; target: number } => edge.source !== undefined && edge.target !== undefined);
-
-  let crossings = 0;
-
-  for (let i = 0; i < filtered.length; i += 1) {
-    for (let j = i + 1; j < filtered.length; j += 1) {
-      const left = filtered[i];
-      const right = filtered[j];
-
-      if ((left.source - right.source) * (left.target - right.target) < 0) {
-        crossings += 1;
+export function adjacentSwapDelta(
+  leftId: string,
+  rightId: string,
+  nodeMap: Map<string, InternalNode>,
+  incoming: Map<string, string[]>,
+  outgoing: Map<string, string[]>,
+) {
+  const layer = nodeMap.get(leftId)?.layer;
+  if (layer === undefined) return 0;
+  let delta = 0;
+  const compare = (leftNeighbors: string[], rightNeighbors: string[], adjacentLayer: number) => {
+    for (const leftNeighbor of leftNeighbors) {
+      const left = nodeMap.get(leftNeighbor);
+      if (left?.layer !== adjacentLayer) continue;
+      for (const rightNeighbor of rightNeighbors) {
+        const right = nodeMap.get(rightNeighbor);
+        if (right?.layer !== adjacentLayer) continue;
+        if (left.order < right.order) delta += 1;
+        else if (left.order > right.order) delta -= 1;
       }
     }
-  }
-
-  return crossings;
-}
-
-function buildEdgesByUpperLayer(layers: string[][], edges: InternalEdge[], nodeMap: Map<string, InternalNode>) {
-  const byLayer = new Map<number, InternalEdge[]>();
-
-  for (let layerIndex = 0; layerIndex < layers.length - 1; layerIndex += 1) {
-    byLayer.set(layerIndex, []);
-  }
-
-  edges.forEach((edge) => {
-    const sourceLayer = nodeMap.get(edge.source)?.layer ?? 0;
-    const targetLayer = nodeMap.get(edge.target)?.layer ?? sourceLayer;
-
-    if (targetLayer - sourceLayer === 1) {
-      const list = byLayer.get(sourceLayer) ?? [];
-      list.push(edge);
-      byLayer.set(sourceLayer, list);
-    }
-  });
-
-  return byLayer;
-}
-
-function localCrossingScore(
-  layers: string[][],
-  layerIndex: number,
-  edgesByLayer: Map<number, InternalEdge[]>,
-) {
-  let total = 0;
-
-  if (layerIndex > 0) {
-    total += countAdjacentLayerCrossings(
-      layers[layerIndex - 1],
-      layers[layerIndex],
-      edgesByLayer.get(layerIndex - 1) ?? [],
-    );
-  }
-
-  if (layerIndex < layers.length - 1) {
-    total += countAdjacentLayerCrossings(
-      layers[layerIndex],
-      layers[layerIndex + 1],
-      edgesByLayer.get(layerIndex) ?? [],
-    );
-  }
-
-  return total;
+  };
+  // For adjacent nodes, edges to all other nodes keep their relative endpoint order.
+  // Only pairs attached to opposite swapped nodes can change their crossing status.
+  compare(incoming.get(leftId) ?? [], incoming.get(rightId) ?? [], layer - 1);
+  compare(outgoing.get(leftId) ?? [], outgoing.get(rightId) ?? [], layer + 1);
+  return delta;
 }
 
 function transposeLayer(
   layers: string[][],
   layerIndex: number,
   nodeMap: Map<string, InternalNode>,
-  edgesByLayer: Map<number, InternalEdge[]>,
+  incoming: Map<string, string[]>,
+  outgoing: Map<string, string[]>,
 ) {
   let improved = true;
 
@@ -296,29 +253,22 @@ function transposeLayer(
     improved = false;
 
     for (let index = 0; index < layers[layerIndex].length - 1; index += 1) {
-      const before = localCrossingScore(layers, layerIndex, edgesByLayer);
-      const layerCopy = layers[layerIndex].slice();
-      [layerCopy[index], layerCopy[index + 1]] = [layerCopy[index + 1], layerCopy[index]];
-      layers[layerIndex] = layerCopy;
-      reindexLayers(layers, nodeMap);
-
-      const after = localCrossingScore(layers, layerIndex, edgesByLayer);
-
-      if (after < before) {
+      const leftId = layers[layerIndex][index];
+      const rightId = layers[layerIndex][index + 1];
+      if (adjacentSwapDelta(leftId, rightId, nodeMap, incoming, outgoing) < 0) {
+        [layers[layerIndex][index], layers[layerIndex][index + 1]] = [rightId, leftId];
+        const left = nodeMap.get(leftId);
+        const right = nodeMap.get(rightId);
+        if (left) left.order = index + 1;
+        if (right) right.order = index;
         improved = true;
-      } else {
-        const revert = layers[layerIndex].slice();
-        [revert[index], revert[index + 1]] = [revert[index + 1], revert[index]];
-        layers[layerIndex] = revert;
-        reindexLayers(layers, nodeMap);
       }
     }
   }
 }
 
-function minimizeCrossings(layers: string[][], nodeMap: Map<string, InternalNode>, edges: InternalEdge[]) {
+function minimizeCrossings(layers: string[][], nodeMap: Map<string, InternalNode>, edges: InternalEdge[], profile?: Record<string, number>) {
   const { incoming, outgoing } = buildNeighborIndex(edges);
-  const edgesByLayer = buildEdgesByUpperLayer(layers, edges, nodeMap);
 
   reindexLayers(layers, nodeMap);
 
@@ -326,13 +276,17 @@ function minimizeCrossings(layers: string[][], nodeMap: Map<string, InternalNode
     for (let layerIndex = 1; layerIndex < layers.length; layerIndex += 1) {
       layers[layerIndex] = sortLayerByMedian(layers[layerIndex], incoming, nodeMap);
       reindexLayers(layers, nodeMap);
-      transposeLayer(layers, layerIndex, nodeMap, edgesByLayer);
+      const transposeStart = performance.now();
+      transposeLayer(layers, layerIndex, nodeMap, incoming, outgoing);
+      if (profile) profile.transposeMs = (profile.transposeMs ?? 0) + performance.now() - transposeStart;
     }
 
     for (let layerIndex = layers.length - 2; layerIndex >= 0; layerIndex -= 1) {
       layers[layerIndex] = sortLayerByMedian(layers[layerIndex], outgoing, nodeMap);
       reindexLayers(layers, nodeMap);
-      transposeLayer(layers, layerIndex, nodeMap, edgesByLayer);
+      const transposeStart = performance.now();
+      transposeLayer(layers, layerIndex, nodeMap, incoming, outgoing);
+      if (profile) profile.transposeMs = (profile.transposeMs ?? 0) + performance.now() - transposeStart;
     }
   }
 
@@ -458,7 +412,12 @@ function normalizeLayout(nodes: InternalNode[], boxes: LayoutBox[]) {
   });
 }
 
-export function layoutSugiyama(graph: LayeredGraph): PositionedLayout {
+export function layoutSugiyama(graph: LayeredGraph, profile?: Record<string, number>): PositionedLayout {
+  let stageStart = performance.now();
+  const mark = (stage: string) => {
+    if (profile) profile[stage] = performance.now() - stageStart;
+    stageStart = performance.now();
+  };
   const baseNodes = cloneNodes(graph.nodes);
   const baseNodeMap = buildNodeMap(baseNodes);
   const baseLayers = buildLayersFromGraph(graph, baseNodeMap);
@@ -470,22 +429,28 @@ export function layoutSugiyama(graph: LayeredGraph): PositionedLayout {
     baseNodeMap,
   );
   const nodeMap = buildNodeMap(expandedNodes);
+  mark('properizationMs');
 
   reindexLayers(expandedLayers, nodeMap);
-  minimizeCrossings(expandedLayers, nodeMap, expandedEdges);
+  minimizeCrossings(expandedLayers, nodeMap, expandedEdges, profile);
+  mark('orderingMs');
   assignCoordinates(expandedLayers, nodeMap, expandedEdges);
+  mark('coordinatesMs');
 
   const boxes = buildBoxes(expandedLayers, nodeMap);
   normalizeLayout(expandedNodes, boxes);
+  mark('boxesMs');
 
-  const crossings = countCrossings({
+  const geometry: PositionedLayout = {
     mode: 'traditional',
     nodes: expandedNodes,
     edges: expandedEdges,
     layers: expandedLayers,
     boxes,
     metrics: { width: 0, height: 0, crossings: 0 },
-  });
+  };
+  const crossings = countCrossings(geometry);
+  mark('metricMs');
   const width = Math.max(...boxes.map((box) => box.x + box.width), OUTER_PADDING) + OUTER_PADDING;
   const height = Math.max(...boxes.map((box) => box.y + box.height), OUTER_PADDING) + OUTER_PADDING;
 
@@ -499,6 +464,7 @@ export function layoutSugiyama(graph: LayeredGraph): PositionedLayout {
       width,
       height,
       crossings,
+      totalEdgeLength: totalEdgeLength(geometry),
     },
   };
 }

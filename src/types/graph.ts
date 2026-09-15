@@ -57,6 +57,8 @@ export interface LayoutMetrics {
   width: number;
   height: number;
   crossings: number;
+  blockInversions?: number;
+  totalEdgeLength?: number;
 }
 
 export interface PositionedLayout {
@@ -74,6 +76,7 @@ export interface TradeoffPoint {
   width: number;
   crossings: number;
   height: number;
+  totalEdgeLength?: number;
 }
 
 export interface DemoPreset {

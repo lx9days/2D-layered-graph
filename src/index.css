@@ -114,9 +114,13 @@ button {
 
 .workspace {
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
-  gap: 20px;
-  margin-top: 20px;
+  grid-template-columns: 324px minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.workspace--stacked {
+  grid-template-columns: 1fr;
 }
 
 .panel,
@@ -133,12 +137,12 @@ button {
   position: sticky;
   top: 16px;
   align-self: start;
-  padding: 20px;
+  padding: 16px;
 }
 
 .panel__block + .panel__block {
-  margin-top: 24px;
-  padding-top: 24px;
+  margin-top: 18px;
+  padding-top: 18px;
   border-top: 1px solid #f3f4f6;
 }
 
@@ -164,7 +168,7 @@ button {
 .panel__title-row p,
 .graph-card__header p,
 .plot-card__header p {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
 }
 
 .panel__status,
@@ -180,21 +184,29 @@ button {
 }
 
 .panel__subtitle {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   font-size: 14px;
   color: #374151;
 }
 
+.panel__quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .preset-grid {
   display: grid;
-  gap: 10px;
-  margin-top: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .preset-button {
   display: grid;
   gap: 6px;
-  padding: 14px 16px;
+  padding: 12px 12px;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #ffffff;
@@ -222,7 +234,7 @@ button {
 }
 
 .field + .field {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .field input[type="range"],
@@ -243,7 +255,7 @@ button {
 
 .field input[type="number"],
 .field select {
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
 
 .field strong {
@@ -252,23 +264,54 @@ button {
 }
 
 .field--static {
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-radius: 10px;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
 }
 
 .panel__note {
-  margin-top: 16px;
-  padding: 14px;
+  margin-top: 12px;
+  padding: 12px;
   border-radius: 10px;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
 }
 
+.panel-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f9fafb;
+  color: #374151;
+}
+
+.panel-toggle span {
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.panel-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+}
+
 .content {
   display: grid;
   gap: 20px;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
 }
 
 .graphs-grid {
@@ -362,8 +405,8 @@ button {
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .metric-card {
@@ -438,6 +481,7 @@ button {
 
 @media (max-width: 1260px) {
   .workspace,
+  .compare-grid,
   .graphs-grid,
   .metrics-grid {
     grid-template-columns: 1fr;
@@ -445,6 +489,11 @@ button {
 
   .panel {
     position: static;
+  }
+
+  .preset-grid,
+  .panel__quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -460,5 +509,10 @@ button {
 
   .hero__stats {
     min-width: 0;
+  }
+
+  .preset-grid,
+  .panel__quick-actions {
+    grid-template-columns: 1fr;
   }
 }

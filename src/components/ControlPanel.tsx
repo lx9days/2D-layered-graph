@@ -1,3 +1,4 @@
+import type { BlockSimilarity } from '@/lib/layout/multiRow/clustering';
 import { presets } from '@/lib/graph/generateGraph';
 import type { GraphConfig, OrderingStrategy, PresetSelection, TraversalStrategy } from '@/types/graph';
 
@@ -7,18 +8,37 @@ interface ControlPanelProps {
   rowsPerLayer: number;
   blockSpread: number;
   spanExponent: number;
+  blockSimilarity: BlockSimilarity;
+  clusteringThreshold: number;
+
   edgeBundling: boolean;
   ordering: OrderingStrategy;
   traversal: TraversalStrategy;
+  widthWeight: number;
+  crossingWeight: number;
+  edgeDetourWeight: number;
+  backtrackingWeight: number;
+  enableRowMove: boolean;
+  enableNodeSwap: boolean;
+  enableAdjacentReorder: boolean;
   layerSummary: string;
   onApplyPreset: (presetKey: keyof typeof presets) => void;
   onUpdateGraphConfig: (patch: Partial<GraphConfig>) => void;
   onUpdateRows: (rows: number) => void;
   onUpdateBlockSpread: (spread: number) => void;
+  onUpdateBlockSimilarity: (criterion: BlockSimilarity) => void;
+  onUpdateClusteringThreshold: (threshold: number) => void;
   onUpdateSpanExponent: (exponent: number) => void;
   onUpdateEdgeBundling: (enabled: boolean) => void;
   onUpdateOrdering: (ordering: OrderingStrategy) => void;
   onUpdateTraversal: (traversal: TraversalStrategy) => void;
+  onUpdateWidthWeight: (weight: number) => void;
+  onUpdateCrossingWeight: (weight: number) => void;
+  onUpdateEdgeDetourWeight: (weight: number) => void;
+  onUpdateBacktrackingWeight: (weight: number) => void;
+  onUpdateEnableRowMove: (enabled: boolean) => void;
+  onUpdateEnableNodeSwap: (enabled: boolean) => void;
+  onUpdateEnableAdjacentReorder: (enabled: boolean) => void;
 }
 
 export default function ControlPanel({
@@ -27,18 +47,36 @@ export default function ControlPanel({
   rowsPerLayer,
   blockSpread,
   spanExponent,
+  blockSimilarity,
+  clusteringThreshold,
   edgeBundling,
   ordering,
   traversal,
+  widthWeight,
+  crossingWeight,
+  edgeDetourWeight,
+  backtrackingWeight,
+  enableRowMove,
+  enableNodeSwap,
+  enableAdjacentReorder,
   layerSummary,
   onApplyPreset,
   onUpdateGraphConfig,
   onUpdateRows,
   onUpdateBlockSpread,
   onUpdateSpanExponent,
+  onUpdateBlockSimilarity,
+  onUpdateClusteringThreshold,
   onUpdateEdgeBundling,
   onUpdateOrdering,
   onUpdateTraversal,
+  onUpdateWidthWeight,
+  onUpdateCrossingWeight,
+  onUpdateEdgeDetourWeight,
+  onUpdateBacktrackingWeight,
+  onUpdateEnableRowMove,
+  onUpdateEnableNodeSwap,
+  onUpdateEnableAdjacentReorder,
 }: ControlPanelProps) {
   return (
     <aside className="panel">
@@ -49,6 +87,44 @@ export default function ControlPanel({
             <p>在同一张图上比较传统 1D 分层和紧凑 2D 分层的行为差异。</p>
           </div>
           <div className="panel__status">{activePreset === 'custom' ? '自定义' : '预设'}</div>
+        </div>
+
+        <div className="panel__quick-actions">
+          <label className="panel-toggle">
+            <span>Row Move</span>
+            <input
+              type="checkbox"
+              checked={enableRowMove}
+              onChange={(event) => onUpdateEnableRowMove(event.target.checked)}
+            />
+          </label>
+
+          <label className="panel-toggle">
+            <span>Node Swap</span>
+            <input
+              type="checkbox"
+              checked={enableNodeSwap}
+              onChange={(event) => onUpdateEnableNodeSwap(event.target.checked)}
+            />
+          </label>
+
+          <label className="panel-toggle">
+            <span>Adjacent Reorder</span>
+            <input
+              type="checkbox"
+              checked={enableAdjacentReorder}
+              onChange={(event) => onUpdateEnableAdjacentReorder(event.target.checked)}
+            />
+          </label>
+
+          <label className="panel-toggle">
+            <span>Edge Bundle</span>
+            <input
+              type="checkbox"
+              checked={edgeBundling}
+              onChange={(event) => onUpdateEdgeBundling(event.target.checked)}
+            />
+          </label>
         </div>
 
         <div className="preset-grid">
@@ -144,6 +220,28 @@ export default function ControlPanel({
         <div className="panel__subtitle">紧凑布局</div>
 
         <label className="field">
+          <span>分块标准</span>
+          <select value={blockSimilarity} onChange={(event) => onUpdateBlockSimilarity(event.target.value as BlockSimilarity)}>
+            <option value="neighbors">共同邻居聚类</option>
+            <option value="layer-profile">连接层分布聚类</option>
+            <option value="role">结构角色聚类</option>
+            <option value="legacy">原连续区间分块（对照）</option>
+          </select>
+        </label>
+        {blockSimilarity !== 'legacy' && <label className="field">
+          <span>聚类合并阈值</span>
+          <input type="range" min="0" max="1" step="0.05" value={clusteringThreshold}
+            onChange={(event) => onUpdateClusteringThreshold(Number(event.target.value))} />
+          <strong>{clusteringThreshold.toFixed(2)}</strong>
+        </label>}
+        <div className="panel__note">
+          {blockSimilarity === 'neighbors' ? '按共同入邻居、出邻居和加权度数聚类。' :
+           blockSimilarity === 'layer-profile' ? '按输入、输出连接在各语义层的分布聚类，不要求邻居相同。' :
+           blockSimilarity === 'role' ? '按入度、出度、输入占比和长边占比聚类。' : '先按相似性排序，再用动态规划切连续区间。'}
+          {blockSimilarity !== 'legacy' && ' 阈值越高，合并越严格，通常形成更多、更小的块。'}
+        </div>
+
+        <label className="field">
           <span>最大块内行数</span>
           <input
             type="range"
@@ -177,12 +275,6 @@ export default function ControlPanel({
           </select>
         </label>
 
-        <label className="field field--toggle">
-          <span>Edge bundle（同块对捆绑）</span>
-          <input type="checkbox" checked={edgeBundling}
-            onChange={(event) => onUpdateEdgeBundling(event.target.checked)} />
-        </label>
-
         <label className="field">
           <span>节点排序</span>
           <select value={ordering} onChange={(event) => onUpdateOrdering(event.target.value as OrderingStrategy)}>
@@ -199,9 +291,65 @@ export default function ControlPanel({
             <option value="hilbert">Hilbert 近似占位</option>
           </select>
         </label>
+      </div>
+
+      <div className="panel__block">
+        <div className="panel__subtitle">优化目标权重</div>
+
+        <label className="field">
+          <span>Width</span>
+          <input
+            type="range"
+            min="0"
+            max="3"
+            step="0.05"
+            value={widthWeight}
+            onChange={(event) => onUpdateWidthWeight(Number(event.target.value))}
+          />
+          <strong>{widthWeight.toFixed(2)}</strong>
+        </label>
+
+        <label className="field">
+          <span>Crossings</span>
+          <input
+            type="range"
+            min="0"
+            max="3"
+            step="0.05"
+            value={crossingWeight}
+            onChange={(event) => onUpdateCrossingWeight(Number(event.target.value))}
+          />
+          <strong>{crossingWeight.toFixed(2)}</strong>
+        </label>
+
+        <label className="field">
+          <span>Edge Detour</span>
+          <input
+            type="range"
+            min="0"
+            max="3"
+            step="0.05"
+            value={edgeDetourWeight}
+            onChange={(event) => onUpdateEdgeDetourWeight(Number(event.target.value))}
+          />
+          <strong>{edgeDetourWeight.toFixed(2)}</strong>
+        </label>
+
+        <label className="field">
+          <span>Backtracking</span>
+          <input
+            type="range"
+            min="0"
+            max="3"
+            step="0.05"
+            value={backtrackingWeight}
+            onChange={(event) => onUpdateBacktrackingWeight(Number(event.target.value))}
+          />
+          <strong>{backtrackingWeight.toFixed(2)}</strong>
+        </label>
 
         <div className="panel__note">
-          区块按拓扑相似性形成连续段；跨层边按跨度的幂次加权，分块会额外避免把跨层边端点与普通节点混合。Edge bundle 仅改变二维视图的绘制，同一对块的多条边共用主干。块内行数按层节点数调整。块间分散控制把剩余水平空间分给相邻块的比例。Hilbert 仍先用蛇形近似。
+          左侧视图固定显示无局部优化版本；右侧视图根据这里的权重和 move 开关进行优化。当前 `backtracking` 仍是工程代理指标，建议先把它当作实验参数而不是结论性指标。
         </div>
       </div>
     </aside>

@@ -15,18 +15,36 @@ export default function Home() {
     rowsPerLayer,
     blockSpread,
     spanExponent,
+    blockSimilarity,
+    clusteringThreshold,
     edgeBundling,
     ordering,
     traversal,
+    widthWeight,
+    crossingWeight,
+    edgeDetourWeight,
+    backtrackingWeight,
+    enableRowMove,
+    enableNodeSwap,
+    enableAdjacentReorder,
     hoveredNodeId,
     applyPreset,
     updateGraphConfig,
     updateRowsPerLayer,
     updateBlockSpread,
     updateSpanExponent,
+    updateBlockSimilarity,
+    updateClusteringThreshold,
     updateEdgeBundling,
     updateOrdering,
     updateTraversal,
+    updateWidthWeight,
+    updateCrossingWeight,
+    updateEdgeDetourWeight,
+    updateBacktrackingWeight,
+    updateEnableRowMove,
+    updateEnableNodeSwap,
+    updateEnableAdjacentReorder,
     setHoveredNodeId,
   } = useDemoStore();
 
@@ -48,11 +66,43 @@ export default function Home() {
       } else setLayoutError(event.data.message ?? '布局计算失败');
     };
     worker.onerror = (event) => setLayoutError(event.message || '布局计算失败');
-    worker.postMessage({ graph, ordering, traversal, rowsPerLayer, blockSpread, spanExponent });
+    worker.postMessage({
+      graph,
+      ordering,
+      traversal,
+      rowsPerLayer,
+      blockSpread,
+      spanExponent,
+      blockSimilarity,
+      clusteringThreshold,
+      widthWeight,
+      crossingWeight,
+      edgeDetourWeight,
+      backtrackingWeight,
+      enableRowMove,
+      enableNodeSwap,
+      enableAdjacentReorder,
+    });
     return () => worker.terminate();
-  }, [graph, ordering, traversal, rowsPerLayer, blockSpread, spanExponent]);
+  }, [
+    graph,
+    ordering,
+    traversal,
+    rowsPerLayer,
+    blockSpread,
+    spanExponent,
+    blockSimilarity,
+    clusteringThreshold,
+    widthWeight,
+    crossingWeight,
+    edgeDetourWeight,
+    backtrackingWeight,
+    enableRowMove,
+    enableNodeSwap,
+    enableAdjacentReorder,
+  ]);
   const delta = useMemo(
-    () => layoutBundle ? computeDelta(layoutBundle.traditional, layoutBundle.compact) : null,
+    () => layoutBundle ? computeDelta(layoutBundle.unoptimizedCompact, layoutBundle.compact) : null,
     [layoutBundle],
   );
   const layerSummary = useMemo(() => getLayerSummary(graphConfig), [graphConfig]);
@@ -83,42 +133,24 @@ export default function Home() {
         </div>
       </section>
 
-      <div className="workspace">
-        <ControlPanel
-          activePreset={activePreset}
-          graphConfig={graphConfig}
-          rowsPerLayer={rowsPerLayer}
-          blockSpread={blockSpread}
-          spanExponent={spanExponent}
-          edgeBundling={edgeBundling}
-          ordering={ordering}
-          traversal={traversal}
-          layerSummary={layerSummary}
-          onApplyPreset={applyPreset}
-          onUpdateGraphConfig={updateGraphConfig}
-          onUpdateRows={updateRowsPerLayer}
-          onUpdateBlockSpread={updateBlockSpread}
-          onUpdateSpanExponent={updateSpanExponent}
-          onUpdateEdgeBundling={updateEdgeBundling}
-          onUpdateOrdering={updateOrdering}
-          onUpdateTraversal={updateTraversal}
-        />
-
+      <div className="workspace workspace--stacked">
         <section className="content">
           {layoutError && <div className="panel" role="alert">布局计算失败：{layoutError}</div>}
           {!layoutBundle && !layoutError && <div className="panel" role="status">正在计算布局，请稍候…</div>}
           {layoutBundle && delta && <>
-          <div className="graphs-grid">
+          <div className="compare-grid">
             <GraphView
-              title="传统分层布局"
-              subtitle="使用 Sugiyama 流水线作为传统层次布局基线。"
-              layout={layoutBundle.traditional}
+              title="无优化 Multi-Row"
+              subtitle="使用所选聚类标准与初始多行分配，但不执行 row move、swap 和 reorder。"
+              layout={layoutBundle.unoptimizedCompact}
               hoveredNodeId={hoveredNodeId}
               onHoverNode={setHoveredNodeId}
+              edgeBundling={edgeBundling}
             />
+
             <GraphView
-              title="紧凑二维层布局"
-              subtitle="区块沿层主轴做 1D 排列，块内再做二维压缩。"
+              title="有优化 Multi-Row"
+              subtitle="结果受下方 move 开关和 objective 权重控制。"
               layout={layoutBundle.compact}
               edgeBundling={edgeBundling}
               hoveredNodeId={hoveredNodeId}
@@ -126,7 +158,58 @@ export default function Home() {
             />
           </div>
 
-          <MetricsPanel traditional={layoutBundle.traditional} compact={layoutBundle.compact} delta={delta} />
+          <ControlPanel
+            activePreset={activePreset}
+            graphConfig={graphConfig}
+            rowsPerLayer={rowsPerLayer}
+            blockSpread={blockSpread}
+            spanExponent={spanExponent}
+            blockSimilarity={blockSimilarity}
+            clusteringThreshold={clusteringThreshold}
+            edgeBundling={edgeBundling}
+            ordering={ordering}
+            traversal={traversal}
+            widthWeight={widthWeight}
+            crossingWeight={crossingWeight}
+            edgeDetourWeight={edgeDetourWeight}
+            backtrackingWeight={backtrackingWeight}
+            enableRowMove={enableRowMove}
+            enableNodeSwap={enableNodeSwap}
+            enableAdjacentReorder={enableAdjacentReorder}
+            layerSummary={layerSummary}
+            onApplyPreset={applyPreset}
+            onUpdateGraphConfig={updateGraphConfig}
+            onUpdateRows={updateRowsPerLayer}
+            onUpdateBlockSpread={updateBlockSpread}
+            onUpdateSpanExponent={updateSpanExponent}
+            onUpdateBlockSimilarity={updateBlockSimilarity}
+            onUpdateClusteringThreshold={updateClusteringThreshold}
+            onUpdateEdgeBundling={updateEdgeBundling}
+            onUpdateOrdering={updateOrdering}
+            onUpdateTraversal={updateTraversal}
+            onUpdateWidthWeight={updateWidthWeight}
+            onUpdateCrossingWeight={updateCrossingWeight}
+            onUpdateEdgeDetourWeight={updateEdgeDetourWeight}
+            onUpdateBacktrackingWeight={updateBacktrackingWeight}
+            onUpdateEnableRowMove={updateEnableRowMove}
+            onUpdateEnableNodeSwap={updateEnableNodeSwap}
+            onUpdateEnableAdjacentReorder={updateEnableAdjacentReorder}
+          />
+
+          <MetricsPanel
+            traditional={layoutBundle.traditional}
+            unoptimized={layoutBundle.unoptimizedCompact}
+            compact={layoutBundle.compact}
+            delta={delta}
+          />
+
+          <GraphView
+            title="Sugiyama Baseline"
+            subtitle="原始 1D layered layout，放在底部作为对照基线。"
+            layout={layoutBundle.traditional}
+            hoveredNodeId={hoveredNodeId}
+            onHoverNode={setHoveredNodeId}
+          />
 
           {layoutBundle.tradeoffPoints.length > 0 && <TradeoffPlot
             points={layoutBundle.tradeoffPoints}

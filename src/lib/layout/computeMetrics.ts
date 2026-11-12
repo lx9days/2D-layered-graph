@@ -5,13 +5,14 @@ import type {
   TradeoffPoint,
   TraversalStrategy,
 } from '@/types/graph';
-import { layoutBlockCompact } from '@/lib/layout/blockCompact';
 import { orderNodes } from '@/lib/layout/orderNodes';
+import { layoutMultiRowCompact, type LayoutMultiRowCompactOptions } from '@/lib/layout/multiRowCompact';
 import { layoutSugiyama } from '@/lib/layout/sugiyama';
 
 export interface LayoutBundle {
   orderedGraph: LayeredGraph;
   traditional: PositionedLayout;
+  unoptimizedCompact: PositionedLayout;
   compact: PositionedLayout;
   tradeoffPoints: TradeoffPoint[];
 }
@@ -26,32 +27,35 @@ export function buildLayouts(
   ordering: OrderingStrategy,
   traversal: TraversalStrategy,
   rowsPerLayer: number,
-  sampleMaxRows = 8,
+  sampleMaxRows = 0,
   blockSpread = 0.7,
   spanExponent = 2,
+  optimizedOptions: LayoutMultiRowCompactOptions = {},
 ): LayoutBundle {
   const orderedGraph = orderNodes(graph, ordering);
   const traditional = layoutSugiyama(graph);
-  const compact = layoutBlockCompact(
-    graph,
-    rowsPerLayer,
-    traversal === 'hilbert' ? 'serpentine' : traversal,
-    ordering,
-    undefined,
+  const unoptimizedCompact = layoutMultiRowCompact(graph, rowsPerLayer, {
     blockSpread,
     spanExponent,
-  );
+    ...optimizedOptions,
+    enableRowOptimization: false,
+  });
+  const compact = layoutMultiRowCompact(graph, rowsPerLayer, {
+    blockSpread,
+    spanExponent,
+    ...optimizedOptions,
+  });
   const tradeoffPoints: TradeoffPoint[] = [];
 
   for (let rows = 1; rows <= sampleMaxRows; rows += 1) {
-    const sample = rows === rowsPerLayer ? compact : layoutBlockCompact(
+    const sample = rows === rowsPerLayer ? compact : layoutMultiRowCompact(
       graph,
       rows,
-      traversal === 'hilbert' ? 'serpentine' : traversal,
-      ordering,
-      undefined,
-      blockSpread,
-      spanExponent,
+      {
+        blockSpread,
+        spanExponent,
+        ...optimizedOptions,
+      },
     );
     tradeoffPoints.push({
       rows,
@@ -65,6 +69,7 @@ export function buildLayouts(
   return {
     orderedGraph,
     traditional,
+    unoptimizedCompact,
     compact,
     tradeoffPoints,
   };

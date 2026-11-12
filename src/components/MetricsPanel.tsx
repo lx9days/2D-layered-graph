@@ -3,6 +3,7 @@ import type { LayoutDelta } from '@/lib/layout/computeMetrics';
 
 interface MetricsPanelProps {
   traditional: PositionedLayout;
+  unoptimized: PositionedLayout;
   compact: PositionedLayout;
   delta: LayoutDelta;
 }
@@ -19,11 +20,13 @@ function MetricCard({
   title: string;
   layout: PositionedLayout;
 }) {
+  const isTraditional = layout.mode === 'traditional';
+
   return (
     <div className="metric-card">
       <div className="metric-card__header">
         <h3>{title}</h3>
-        <span>{layout.mode === 'traditional' ? 'Baseline' : 'Compact'}</span>
+        <span>{isTraditional ? 'Baseline' : 'Multi-Row'}</span>
       </div>
       <dl>
         <div>
@@ -46,24 +49,29 @@ function MetricCard({
           <dt>绘制边总长度</dt>
           <dd>{Math.round(layout.metrics.totalEdgeLength)}</dd>
         </div>}
+        {layout.metrics.backtracking !== undefined && <div>
+          <dt>逆向代价</dt>
+          <dd>{layout.metrics.backtracking.toFixed(2)}</dd>
+        </div>}
       </dl>
     </div>
   );
 }
 
-export default function MetricsPanel({ traditional, compact, delta }: MetricsPanelProps) {
+export default function MetricsPanel({ traditional, unoptimized, compact, delta }: MetricsPanelProps) {
   return (
     <section className="metrics-grid">
-      <MetricCard title="传统布局" layout={traditional} />
-      <MetricCard title="紧凑布局" layout={compact} />
+      <MetricCard title="无优化 Multi-Row" layout={unoptimized} />
+      <MetricCard title="有优化 Multi-Row" layout={compact} />
+      <MetricCard title="Sugiyama Baseline" layout={traditional} />
       <div className="metric-card metric-card--delta">
         <div className="metric-card__header">
-          <h3>关键差异</h3>
-          <span>Width ↔ Crossings</span>
+          <h3>优化收益</h3>
+          <span>无优化 → 有优化</span>
         </div>
         <dl>
           <div>
-            <dt>宽度压缩</dt>
+            <dt>宽度变化</dt>
             <dd>{formatPercent(delta.widthReduction)}</dd>
           </div>
           <div>
@@ -73,9 +81,11 @@ export default function MetricsPanel({ traditional, compact, delta }: MetricsPan
           <div>
             <dt>观察结论</dt>
             <dd className="metric-card__insight">
-              {delta.widthReduction > 0
-                ? '二维层已开始明显回收水平空间。'
-                : '当前 row count 仍接近传统单行布局。'}
+              {delta.widthReduction > 0 && delta.crossingChange <= 0
+                ? '当前优化同时缩小了宽度并控制了交叉。'
+                : delta.widthReduction > 0
+                  ? '当前优化优先回收了宽度，但仍需观察交叉代价。'
+                  : '当前优化尚未带来明显的几何收益。'}
             </dd>
           </div>
         </dl>

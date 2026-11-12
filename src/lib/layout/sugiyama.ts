@@ -1,5 +1,5 @@
 import { countCrossings, totalEdgeLength } from '@/lib/layout/countCrossings';
-import type { GraphEdge, GraphNode, LayeredGraph, LayoutBox, PositionedLayout } from '@/types/graph';
+import type { EdgeRoute, GraphEdge, GraphNode, LayeredGraph, LayoutBox, PositionedLayout } from '@/types/graph';
 
 const OUTER_PADDING = 64;
 const LAYER_TOP_PADDING = 28;
@@ -88,15 +88,19 @@ function insertDummyNodes(
   const expandedNodes = cloneNodes(nodes);
   const expandedLayers = layers.map((layer) => layer.slice());
   const expandedEdges: InternalEdge[] = [];
+  const edgePaths: Array<{ source: string; target: string; nodeIds: string[] }> = [];
   let dummyCounter = 0;
 
   edges.forEach((edge) => {
     const sourceLayer = nodeMap.get(edge.source)?.layer ?? 0;
     const targetLayer = nodeMap.get(edge.target)?.layer ?? sourceLayer;
     const span = targetLayer - sourceLayer;
+    const path = [edge.source];
 
     if (span <= 1) {
       expandedEdges.push({ ...edge });
+      path.push(edge.target);
+      edgePaths.push({ source: edge.source, target: edge.target, nodeIds: path });
       return;
     }
 
@@ -122,6 +126,7 @@ function insertDummyNodes(
         source: previousId,
         target: dummyId,
       });
+      path.push(dummyId);
       previousId = dummyId;
     }
 
@@ -129,12 +134,15 @@ function insertDummyNodes(
       source: previousId,
       target: edge.target,
     });
+    path.push(edge.target);
+    edgePaths.push({ source: edge.source, target: edge.target, nodeIds: path });
   });
 
   return {
     expandedNodes,
     expandedLayers,
     expandedEdges,
+    edgePaths,
   };
 }
 
@@ -412,6 +420,26 @@ function normalizeLayout(nodes: InternalNode[], boxes: LayoutBox[]) {
   });
 }
 
+function buildEdgeRoutes(edgePaths: Array<{ source: string; target: string; nodeIds: string[] }>, nodeMap: Map<string, InternalNode>) {
+  return edgePaths.flatMap((path) => {
+    const points = path.nodeIds
+      .map((nodeId) => nodeMap.get(nodeId))
+      .filter((node): node is InternalNode => Boolean(node))
+      .map((node) => ({
+        x: node.x,
+        y: node.y,
+        layer: node.layer,
+        nodeId: node.id,
+      }));
+
+    if (points.length < 2) {
+      return [];
+    }
+
+    return [{ source: path.source, target: path.target, points }] satisfies EdgeRoute[];
+  });
+}
+
 export function layoutSugiyama(graph: LayeredGraph, profile?: Record<string, number>): PositionedLayout {
   let stageStart = performance.now();
   const mark = (stage: string) => {
@@ -422,7 +450,7 @@ export function layoutSugiyama(graph: LayeredGraph, profile?: Record<string, num
   const baseNodeMap = buildNodeMap(baseNodes);
   const baseLayers = buildLayersFromGraph(graph, baseNodeMap);
   const forwardEdges = orientEdgesForward(baseNodeMap, graph.edges);
-  const { expandedNodes, expandedLayers, expandedEdges } = insertDummyNodes(
+  const { expandedNodes, expandedLayers, expandedEdges, edgePaths } = insertDummyNodes(
     baseNodes,
     baseLayers,
     forwardEdges,
@@ -445,8 +473,10 @@ export function layoutSugiyama(graph: LayeredGraph, profile?: Record<string, num
     mode: 'traditional',
     nodes: expandedNodes,
     edges: expandedEdges,
+    originalEdges: graph.edges.map((edge) => ({ ...edge })),
     layers: expandedLayers,
     boxes,
+    edgeRoutes: buildEdgeRoutes(edgePaths, nodeMap),
     metrics: { width: 0, height: 0, crossings: 0 },
   };
   const crossings = countCrossings(geometry);
@@ -458,8 +488,10 @@ export function layoutSugiyama(graph: LayeredGraph, profile?: Record<string, num
     mode: 'traditional',
     nodes: expandedNodes,
     edges: expandedEdges,
+    originalEdges: graph.edges.map((edge) => ({ ...edge })),
     layers: expandedLayers,
     boxes,
+    edgeRoutes: buildEdgeRoutes(edgePaths, nodeMap),
     metrics: {
       width,
       height,

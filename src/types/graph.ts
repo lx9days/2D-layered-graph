@@ -1,6 +1,6 @@
 export type OrderingStrategy = 'original' | 'barycenter';
 export type TraversalStrategy = 'row-major' | 'serpentine' | 'hilbert';
-export type LayoutMode = 'traditional' | 'compact';
+export type LayoutMode = 'traditional' | 'compact' | 'multi-row-compact';
 export type PresetKey = 'small' | 'medium' | 'wide-layer' | 'very-wide-layer';
 export type PresetSelection = PresetKey | 'custom';
 
@@ -13,6 +13,10 @@ export interface GraphNode {
   initialX?: number;
   initialY?: number;
   isVirtual?: boolean;
+  logicalLayer?: number;
+  geometricRow?: number;
+  geometricColumn?: number;
+  blockId?: string;
 }
 
 export interface GraphEdge {
@@ -59,6 +63,35 @@ export interface LayoutMetrics {
   crossings: number;
   blockInversions?: number;
   totalEdgeLength?: number;
+  edgeDetour?: number;
+  backtracking?: number;
+}
+
+export interface EdgeRoutePoint {
+  x: number;
+  y: number;
+  layer: number;
+  nodeId?: string;
+}
+
+export interface EdgeRoute {
+  source: string;
+  target: string;
+  points: EdgeRoutePoint[];
+}
+
+export interface OptimizationTrace {
+  iteration: number;
+  moveType: 'row-move' | 'swap' | 'reorder';
+  deltaCost: number;
+  widthBefore: number;
+  widthAfter: number;
+  crossingsBefore: number;
+  crossingsAfter: number;
+  edgeLengthBefore: number;
+  edgeLengthAfter: number;
+  backtrackingBefore: number;
+  backtrackingAfter: number;
 }
 
 export interface PositionedLayout {
@@ -69,6 +102,9 @@ export interface PositionedLayout {
   boxes: LayoutBox[];
   blockBoxes?: BlockBox[];
   metrics: LayoutMetrics;
+  originalEdges?: GraphEdge[];
+  edgeRoutes?: EdgeRoute[];
+  optimizationTrace?: OptimizationTrace[];
 }
 
 export interface TradeoffPoint {

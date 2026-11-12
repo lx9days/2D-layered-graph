@@ -63,15 +63,19 @@ describe('layout pipeline', () => {
     expect(countCrossings(layout)).toBe(1);
   });
 
-  it('reduces width when rows per layer increase', { timeout: 12000 }, () => {
+  it('reduces width when multi-node clusters receive more rows', { timeout: 12000 }, () => {
     const graph = generateGraph({
-      layerCount: 4,
-      nodesPerLayer: 26,
+      layerCount: 2,
+      nodesPerLayer: 8,
       edgeDensity: 0.28,
       seed: 21,
     });
-    const rows1 = buildLayouts(graph, 'original', 'row-major', 1);
-    const rows4 = buildLayouts(graph, 'original', 'row-major', 4);
+    // Identical neighborhoods form actual multi-node clusters. Random graphs
+    // can legitimately yield singleton clusters, which cannot shrink by wrapping.
+    graph.edges = graph.layers[0].flatMap(source => graph.layers[1].map(target => ({ source, target })));
+    const options = { enableRowOptimization: false };
+    const rows1 = buildLayouts(graph, 'original', 'row-major', 1, 0, 0.7, 2, options);
+    const rows4 = buildLayouts(graph, 'original', 'row-major', 4, 0, 0.7, 2, options);
 
     expect(rows4.compact.metrics.width).toBeLessThan(rows1.compact.metrics.width);
     expect(rows4.compact.metrics.height).toBeGreaterThan(rows1.compact.metrics.height);

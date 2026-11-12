@@ -21,7 +21,8 @@ export default function GraphView({
   onHoverNode,
   edgeBundling = false,
 }: GraphViewProps) {
-  const bundlePlan = useMemo(() => edgeBundling && layout.mode === 'compact'
+  const isTraditional = layout.mode === 'traditional';
+  const bundlePlan = useMemo(() => edgeBundling && !isTraditional
     ? planEdgeBundles(layout) : null, [edgeBundling, layout]);
   const incidentNodeIds = new Set<string>();
   const incidentEdgeKeys = new Set<string>();
@@ -45,7 +46,7 @@ export default function GraphView({
           <h3>{title}</h3>
           <p>{subtitle}</p>
         </div>
-        <div className="graph-card__badge">{layout.mode === 'traditional' ? '1D Layer' : '2D Layer'}</div>
+        <div className="graph-card__badge">{isTraditional ? '1D Layer' : '2D Layer'}</div>
       </div>
 
       <svg
@@ -72,7 +73,7 @@ export default function GraphView({
               width={box.width}
               height={box.height}
               rx={16}
-              className={layout.mode === 'traditional' ? 'layer-box layer-box--traditional' : 'layer-box'}
+              className={isTraditional ? 'layer-box layer-box--traditional' : 'layer-box'}
             />
             <text x={box.x + 14} y={box.y + 20} className="layer-label">
               {box.label}

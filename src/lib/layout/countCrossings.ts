@@ -1,4 +1,4 @@
-import type { PositionedLayout } from '@/types/graph';
+import type { EdgeRoute, EdgeRoutePoint, GraphNode, PositionedLayout } from '@/types/graph';
 
 type Point = { x: number; y: number };
 
@@ -24,48 +24,103 @@ function isProperIntersection(a1: Point, a2: Point, b1: Point, b2: Point) {
   return ab1 * ab2 < 0 && cd1 * cd2 < 0;
 }
 
-export function countCrossings(layout: PositionedLayout) {
+function pointsEqual(left: EdgeRoutePoint, right: EdgeRoutePoint) {
+  return left.x === right.x && left.y === right.y;
+}
+
+function buildFallbackRoutes(layout: PositionedLayout) {
   const nodeMap = new Map(layout.nodes.map((node) => [node.id, node]));
+  return layout.edges.flatMap((edge) => {
+    const source = nodeMap.get(edge.source);
+    const target = nodeMap.get(edge.target);
+
+    if (!source || !target) {
+      return [];
+    }
+
+    return [{
+      source: edge.source,
+      target: edge.target,
+      points: [
+        { x: source.x, y: source.y, layer: source.layer, nodeId: source.id },
+        { x: target.x, y: target.y, layer: target.layer, nodeId: target.id },
+      ],
+    }] satisfies EdgeRoute[];
+  });
+}
+
+function getRoutes(layout: PositionedLayout) {
+  return layout.edgeRoutes ?? buildFallbackRoutes(layout);
+}
+
+function routeLength(points: EdgeRoutePoint[]) {
+  let length = 0;
+
+  for (let index = 0; index < points.length - 1; index += 1) {
+    length += Math.hypot(
+      points[index + 1].x - points[index].x,
+      points[index + 1].y - points[index].y,
+    );
+  }
+
+  return length;
+}
+
+function getNodeBacktracking(node: GraphNode, boxesByLayer: Map<number, PositionedLayout['boxes'][number]>) {
+  const box = boxesByLayer.get(node.logicalLayer ?? node.layer);
+
+  if (!box || box.height <= 0) {
+    return 0;
+  }
+
+  return (node.y - box.y) / box.height;
+}
+
+export function countCrossings(layout: PositionedLayout) {
+  const routes = getRoutes(layout);
   let crossings = 0;
 
-  for (let layerIndex = 0; layerIndex < layout.layers.length - 1; layerIndex += 1) {
-    const edges = layout.edges.filter((edge) => {
-      const source = nodeMap.get(edge.source);
-      const target = nodeMap.get(edge.target);
-      return source?.layer === layerIndex && target?.layer === layerIndex + 1;
-    });
+  for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+    const first = routes[routeIndex];
 
-    for (let i = 0; i < edges.length; i += 1) {
-      const first = edges[i];
-      const firstSource = nodeMap.get(first.source);
-      const firstTarget = nodeMap.get(first.target);
+    for (let otherIndex = routeIndex + 1; otherIndex < routes.length; otherIndex += 1) {
+      const second = routes[otherIndex];
 
-      if (!firstSource || !firstTarget) {
+      if (sharedEndpoint(first.source, first.target, second.source, second.target)) {
         continue;
       }
 
-      for (let j = i + 1; j < edges.length; j += 1) {
-        const second = edges[j];
-        const secondSource = nodeMap.get(second.source);
-        const secondTarget = nodeMap.get(second.target);
+      let counted = false;
 
-        if (!secondSource || !secondTarget) {
-          continue;
-        }
+      for (let firstSegment = 0; firstSegment < first.points.length - 1 && !counted; firstSegment += 1) {
+        const firstStart = first.points[firstSegment];
+        const firstEnd = first.points[firstSegment + 1];
 
-        if (sharedEndpoint(first.source, first.target, second.source, second.target)) {
-          continue;
-        }
+        for (let secondSegment = 0; secondSegment < second.points.length - 1; secondSegment += 1) {
+          const secondStart = second.points[secondSegment];
+          const secondEnd = second.points[secondSegment + 1];
 
-        if (
-          isProperIntersection(
-            { x: firstSource.x, y: firstSource.y },
-            { x: firstTarget.x, y: firstTarget.y },
-            { x: secondSource.x, y: secondSource.y },
-            { x: secondTarget.x, y: secondTarget.y },
-          )
-        ) {
-          crossings += 1;
+          if (
+            pointsEqual(firstStart, secondStart) ||
+            pointsEqual(firstStart, secondEnd) ||
+            pointsEqual(firstEnd, secondStart) ||
+            pointsEqual(firstEnd, secondEnd)
+          ) {
+            continue;
+          }
+
+          if (
+            isProperIntersection(
+              { x: firstStart.x, y: firstStart.y },
+              { x: firstEnd.x, y: firstEnd.y },
+              { x: secondStart.x, y: secondStart.y },
+              { x: secondEnd.x, y: secondEnd.y },
+            )
+          ) {
+            crossings += 1;
+            counted = true;
+            break;
+          }
         }
       }
     }
@@ -75,10 +130,23 @@ export function countCrossings(layout: PositionedLayout) {
 }
 
 export function totalEdgeLength(layout: PositionedLayout) {
-  const nodes = new Map(layout.nodes.map((node) => [node.id, node]));
-  return layout.edges.reduce((sum, edge) => {
-    const source = nodes.get(edge.source);
-    const target = nodes.get(edge.target);
-    return source && target ? sum + Math.hypot(target.x - source.x, target.y - source.y) : sum;
+  return getRoutes(layout).reduce((sum, route) => sum + routeLength(route.points), 0);
+}
+
+export function countBacktracking(layout: PositionedLayout) {
+  const boxesByLayer = new Map(layout.boxes.map((box) => [box.layer, box]));
+  const nodeMap = new Map(layout.nodes.map((node) => [node.id, node]));
+
+  return (layout.originalEdges ?? layout.edges).reduce((sum, edge) => {
+    const source = nodeMap.get(edge.source);
+    const target = nodeMap.get(edge.target);
+
+    if (!source || !target) {
+      return sum;
+    }
+
+    const sourceOffset = getNodeBacktracking(source, boxesByLayer);
+    const targetOffset = getNodeBacktracking(target, boxesByLayer);
+    return sum + Math.max(0, sourceOffset - targetOffset);
   }, 0);
 }

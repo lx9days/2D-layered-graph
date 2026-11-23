@@ -162,7 +162,7 @@ describe('layout pipeline', () => {
       ],
       layers: [['a0', 'a1'], ['b0', 'b1'], ['c0']],
     };
-    const layout = buildLayouts(graph, 'original', 'row-major', 2).compact;
+    const layout = buildLayouts(graph, 'original', 'row-major', 2, 0, 0.7, 2, { blockSimilarity: 'neighbors' }).compact;
     const middleBlock = (layout.blockBoxes ?? []).find(
       (block) => block.layer === 1 && block.nodeIds.includes('b0') && block.nodeIds.includes('b1'),
     );

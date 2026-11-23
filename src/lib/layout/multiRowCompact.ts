@@ -4,10 +4,10 @@ import { buildAdjacency, buildSimilarityMatrix } from '@/lib/layout/multiRow/top
 import { seriateLayer } from '@/lib/layout/multiRow/seriation';
 import { partitionLayer } from '@/lib/layout/multiRow/partition';
 import { orderBlocks } from '@/lib/layout/multiRow/blockOrdering';
-import { assignInitialRows } from '@/lib/layout/multiRow/rowAssignment';
+import { assignInitialRows, assignSquareLayerRows } from '@/lib/layout/multiRow/rowAssignment';
 import { optimizeMultiRowLayout } from '@/lib/layout/multiRow/localOptimization';
 import { toPositionedLayout } from '@/lib/layout/multiRow/objective';
-import { clusterLayer, createNodeSimilarity, type BlockSimilarity } from '@/lib/layout/multiRow/clustering';
+import { DEFAULT_CLUSTERING_THRESHOLDS, clusterLayer, createNodeSimilarity, topologySignatures, type BlockSimilarity } from '@/lib/layout/multiRow/clustering';
 import type { MultiRowBlock, MultiRowOptions } from '@/lib/layout/multiRow/types';
 
 function cloneNodes(nodes: GraphNode[]) {
@@ -19,8 +19,8 @@ function getDefaultOptions(maxRows: number, blockSpread: number, spanExponent: n
     maxRows,
     blockSpread,
     spanExponent,
-    blockSimilarity: 'neighbors',
-    clusteringThreshold: 0.65,
+    blockSimilarity: 'topology-strict',
+    clusteringThreshold: DEFAULT_CLUSTERING_THRESHOLDS['topology-strict'],
     enableTopologyBlocking: true,
     enableRowOptimization: true,
     enableRowMove: true,
@@ -46,7 +46,8 @@ function buildInitialBlocks(
 ) {
   if (enableTopologyBlocking && blockSimilarity !== 'legacy') {
     const similarity = createNodeSimilarity(graph, blockSimilarity, spanExponent);
-    const blocksByLayer = graph.layers.map((layer, rank) => clusterLayer(layer, rank, similarity, clusteringThreshold));
+    const signatures = blockSimilarity === 'topology-strict' ? topologySignatures(graph, spanExponent) : undefined;
+    const blocksByLayer = graph.layers.map((layer, rank) => clusterLayer(layer, rank, similarity, clusteringThreshold, signatures));
     const backboneOrders = blocksByLayer.map(blocks => new Map(blocks.flatMap(block => block.nodeIds).map((id, index) => [id, index])));
     return { blocksByLayer, backboneOrders };
   }
@@ -119,6 +120,7 @@ export function layoutMultiRowCompact(
   const mergedOptions: MultiRowOptions = {
     ...getDefaultOptions(maxRows, options.blockSpread ?? 0.7, options.spanExponent ?? 2),
     ...options,
+    clusteringThreshold: options.clusteringThreshold ?? DEFAULT_CLUSTERING_THRESHOLDS[options.blockSimilarity ?? 'topology-strict'],
     maxRows,
     blockSpread: options.blockSpread ?? 0.7,
     spanExponent: options.spanExponent ?? 2,
@@ -138,7 +140,8 @@ export function layoutMultiRowCompact(
     mergedOptions.clusteringThreshold,
   );
   const { layers: orderedLayers, previousNeighbors, nextNeighbors, blockInversions } = orderBlocks(blocksByLayer, graph.edges);
-  const initializedLayers = orderedLayers.map((blocks) => assignInitialRows(blocks, mergedOptions.maxRows));
+  const assignRows = mergedOptions.blockSimilarity === 'topology-strict' ? assignSquareLayerRows : assignInitialRows;
+  const initializedLayers = orderedLayers.map((blocks) => assignRows(blocks, mergedOptions.maxRows));
   const { layout, cost } = optimizeMultiRowLayout(
     graph,
     nodes,

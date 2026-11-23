@@ -1,3 +1,4 @@
+import { DEFAULT_CLUSTERING_THRESHOLDS } from '@/lib/layout/multiRow/clustering';
 import type { BlockSimilarity } from '@/lib/layout/multiRow/clustering';
 import { create } from 'zustand';
 import { presets } from '@/lib/graph/generateGraph';
@@ -11,6 +12,7 @@ interface DemoState {
   spanExponent: number;
   blockSimilarity: BlockSimilarity;
   clusteringThreshold: number;
+  clusteringThresholds: Record<BlockSimilarity, number>;
 
   edgeBundling: boolean;
   ordering: OrderingStrategy;
@@ -52,7 +54,8 @@ export const useDemoStore = create<DemoState>((set) => ({
   blockSpread: 0.7,
   spanExponent: 2,
   blockSimilarity: 'neighbors',
-  clusteringThreshold: 0.65,
+  clusteringThreshold: DEFAULT_CLUSTERING_THRESHOLDS.neighbors,
+  clusteringThresholds: { ...DEFAULT_CLUSTERING_THRESHOLDS },
   edgeBundling: false,
   ordering: 'barycenter',
   traversal: 'serpentine',
@@ -96,9 +99,9 @@ export const useDemoStore = create<DemoState>((set) => ({
   updateBlockSpread: (spread) =>
     set(() => ({ activePreset: 'custom', blockSpread: spread, hoveredNodeId: null })),
   updateBlockSimilarity: (blockSimilarity) =>
-    set(() => ({ activePreset: 'custom', blockSimilarity, hoveredNodeId: null })),
+    set((state) => ({ activePreset: 'custom', blockSimilarity, clusteringThreshold: state.clusteringThresholds[blockSimilarity], hoveredNodeId: null })),
   updateClusteringThreshold: (clusteringThreshold) =>
-    set(() => ({ activePreset: 'custom', clusteringThreshold, hoveredNodeId: null })),
+    set((state) => ({ activePreset: 'custom', clusteringThreshold, clusteringThresholds: { ...state.clusteringThresholds, [state.blockSimilarity]: clusteringThreshold }, hoveredNodeId: null })),
   updateSpanExponent: (exponent) =>
     set(() => ({ activePreset: 'custom', spanExponent: exponent, hoveredNodeId: null })),
   updateEdgeBundling: (enabled) =>

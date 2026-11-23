@@ -222,27 +222,29 @@ export default function ControlPanel({
         <label className="field">
           <span>分块标准</span>
           <select value={blockSimilarity} onChange={(event) => onUpdateBlockSimilarity(event.target.value as BlockSimilarity)}>
-            <option value="neighbors">共同邻居聚类</option>
-            <option value="layer-profile">连接层分布聚类</option>
-            <option value="role">结构角色聚类</option>
-            <option value="legacy">原连续区间分块（对照）</option>
+            <option value="neighbors">共同邻居聚类（原版）</option>
+            <option value="multi-hop">多跳上下游分布（实验）</option>
+            <option value="group-profile">群体连接分布（实验）</option>
           </select>
         </label>
         {blockSimilarity !== 'legacy' && <label className="field">
           <span>聚类合并阈值</span>
-          <input type="range" min="0" max="1" step="0.05" value={clusteringThreshold}
+          <input type="range" min="0" max="1" step="0.01" value={clusteringThreshold}
             onChange={(event) => onUpdateClusteringThreshold(Number(event.target.value))} />
           <strong>{clusteringThreshold.toFixed(2)}</strong>
         </label>}
         <div className="panel__note">
-          {blockSimilarity === 'neighbors' ? '按共同入邻居、出邻居和加权度数聚类。' :
+          {blockSimilarity === 'topology-strict' ? '相同加权邻域先绑定；所有跨组节点对达到阈值才合并。同拓扑组可超过大小上限。默认阈值 0.05，各策略分别保存阈值。每层由最大块的近方形排布确定高度，小块不强制填满。' :
+           blockSimilarity === 'neighbors' ? '按共同入邻居、出邻居和加权度数聚类。' :
            blockSimilarity === 'layer-profile' ? '按输入、输出连接在各语义层的分布聚类，不要求邻居相同。' :
+           blockSimilarity === 'multi-hop' ? '比较 1–3 跳上下游端点分布，逐跳权重为 1、0.5、0.25；双方无路径的维度不计分。' :
+           blockSimilarity === 'group-profile' ? '先以共同邻居标准、固定阈值 0.65 建立各层参考群体，再比较输入输出群体分布。滑块只控制最终分块。' :
            blockSimilarity === 'role' ? '按入度、出度、输入占比和长边占比聚类。' : '先按相似性排序，再用动态规划切连续区间。'}
           {blockSimilarity !== 'legacy' && ' 阈值越高，合并越严格，通常形成更多、更小的块。'}
         </div>
 
         <label className="field">
-          <span>最大块内行数</span>
+          <span>{blockSimilarity === 'topology-strict' ? '自适应块内行数上限' : '最大块内行数'}</span>
           <input
             type="range"
             min="1"
